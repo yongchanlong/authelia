@@ -1,0 +1,15 @@
+version: '2'
+services:
+  traefik:
+    image: traefik:v1.4.0-rc3-alpine
+    command: --logLevel=DEBUG --web
+    volumes:
+      - ./example/traefik/traefik.toml:/etc/traefik/traefik.toml
+      - ./example/traefik/ssl:/etc/ssl
+    ports:
+      - "8090:443"
+      - "8091:8080"
+    depends_on:
+      - authelia
+    networks:
+      - example-network

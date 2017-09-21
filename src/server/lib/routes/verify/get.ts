@@ -8,7 +8,7 @@ import exceptions = require("../../Exceptions");
 import winston = require("winston");
 import AuthenticationValidator = require("../../AuthenticationValidator");
 import ErrorReplies = require("../../ErrorReplies");
-import { ServerVariablesHandler } from "../../ServerVariablesHandler";
+import { ServerVariablesHandler } from "../../ServerVariablesHandler";
 import AuthenticationSession = require("../../AuthenticationSession");
 
 function verify_filter(req: express.Request, res: express.Response): BluebirdPromise<void> {
@@ -24,13 +24,20 @@ function verify_filter(req: express.Request, res: express.Response): BluebirdPro
       const username = authSession.userid;
       const groups = authSession.groups;
 
-      const host = objectPath.get<express.Request, string>(req, "headers.host");
+      console.log(req.headers);
+      let host: string;
+
+      if (req.headers["x-forwarded-host"])
+        host = "" + req.headers["x-forwarded-host"];
+      else
+        host = "" + req.headers["host"];
+
       const domain = host.split(":")[0];
       console.log(domain);
 
       const isAllowed = accessController.isDomainAllowedForUser(domain, username, groups);
       if (!isAllowed) return BluebirdPromise.reject(
-        new exceptions.DomainAccessDenied("User '" + username + "' does not have access to " + domain));
+        new exceptions.DomainAccessDenied("User '" + username + "' does not have access to '" + domain + "'"));
 
       if (!authSession.first_factor || !authSession.second_factor)
         return BluebirdPromise.reject(new exceptions.AccessDeniedError("First or second factor not validated"));
@@ -41,6 +48,7 @@ function verify_filter(req: express.Request, res: express.Response): BluebirdPro
 
 export default function (req: express.Request, res: express.Response): BluebirdPromise<void> {
   const logger = ServerVariablesHandler.getLogger(req.app);
+  const redirectUrl: string = req.query.redirect;
   return verify_filter(req, res)
     .then(function () {
       res.status(204);
@@ -48,6 +56,9 @@ export default function (req: express.Request, res: express.Response): BluebirdP
       return BluebirdPromise.resolve();
     })
     .catch(exceptions.DomainAccessDenied, ErrorReplies.replyWithError403(res, logger))
-    .catch(ErrorReplies.replyWithError401(res, logger));
+    .catch(function () {
+      res.redirect(redirectUrl);
+      return BluebirdPromise.resolve();
+    });
 }
 
